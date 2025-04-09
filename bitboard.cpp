@@ -1,13 +1,13 @@
-//#include "stdafx.h"
+// #include "stdafx.h"
 #include "bitboard.h"
 
-void board::init() {
+void board::reset() {
     m_board = 0;
     insertNewPiece();
     insertNewPiece();
 }
 
-void board::init(board_t pos) { m_board = pos; }
+void board::reset(board_t pos) { m_board = pos; }
 
 int board::getNewPiece() {
     int r = configure::uRNG.rand() % 10;
@@ -43,9 +43,8 @@ int board::getEmptyPos() {
 void board::insertNewPiece() {
     int pos = getEmptyPos();
     if (pos == -1) {
-        cout << "Wrong with getting new empty position" << endl;
-        while (1)
-            ;
+        cout << "insertNewPiece(): Wrong with getting new empty position" << endl;
+        exit(1);
     } else {
         board_t num = getNewPiece();
 
@@ -88,11 +87,40 @@ bool board::isFull() {
     return true;
 };
 
+row_t board::toRightRow(int dir, int i) {
+    switch (dir) {
+        case 0:
+            return operation::reverseRow(operation::getCol(m_board, i));
+        case 1:
+            return operation::getRow(m_board, i);
+        case 2:
+            return operation::getCol(m_board, i);
+        case 3:
+            return operation::reverseRow(operation::getRow(m_board, i));
+        default:
+            cout << "toRightRow: Unknown direction" << endl;
+            exit(1);
+    }
+}
+
+void board::getLegalActions(bool a[4]) {
+    for (int dir = 0; dir < 4; ++dir) {
+        a[dir] = false;
+        for (int i = 0; i < 4; i++) {
+            if (configure::rightInfo[toRightRow(dir, i)].score != -1) {
+                a[dir] = true;
+                break;
+            }
+        }
+    }
+}
+
 // 0 : up
 // 1 : right
 // 2 : down
 // 3 : left
-int board::canMove(int direct) {
+// must move
+int board::move(int direct) {
     row_t row[4];
     int score = 0;
     bool notMove = true;
@@ -111,8 +139,10 @@ int board::canMove(int direct) {
                 // score += moveRight(row[i]);
                 row[i] = operation::reverseRow(row[i]);
             }
-            if (notMove) return -1;
-            else {
+            if (notMove) {
+                cout << "Error: move(): Not moved" << endl;
+                exit(1);
+            } else {
                 m_board = operation::setCols(row);
                 return score;
             }
@@ -130,8 +160,10 @@ int board::canMove(int direct) {
                 }
                 // score += moveRight(row[i]);
             }
-            if (notMove) return -1;
-            else {
+            if (notMove) {
+                cout << "Error: move(): Not moved" << endl;
+                exit(1);
+            } else {
                 m_board = operation::setRows(row);
                 return score;
             }
@@ -149,8 +181,10 @@ int board::canMove(int direct) {
                 }
                 // score += moveRight(row[i]);
             }
-            if (notMove) return -1;
-            else {
+            if (notMove) {
+                cout << "Error: move(): Not moved" << endl;
+                exit(1);
+            } else {
                 m_board = operation::setCols(row);
                 return score;
             }
@@ -168,43 +202,26 @@ int board::canMove(int direct) {
                 }
                 row[i] = operation::reverseRow(row[i]);
             }
-            if (notMove) return -1;
-            else {
+            if (notMove) {
+                cout << "Error: move(): Not moved" << endl;
+                exit(1);
+            } else {
                 m_board = operation::setRows(row);
                 return score;
             }
             break;
         default:
             cout << "Wrong direction!" << endl;
+            exit(1);
             break;
     }
 
     return score;
 };
 
-void board::showBoard() {
-    for (int i = 0; i < 4; i++) {
-        row_t r = operation::getRow(m_board, i);
-        for (int j = 3; j >= 0; j--) {
-            cout << configure::tile_score[((r >> 4 * j) & 0xf)] << "\t";
-        }
-        cout << endl;
-    }
-    cout << endl;
+tuple<board_t, int, bool> board::step(int direct) {
+    int reward = move(direct);
+    // must moved
+    insertNewPiece();
+    return make_tuple(m_board, reward, isEnd());
 }
-
-void board::showBoard(int positionOf1st32k, int positionOf2nd32k, int positionOf64k) {
-    for (int i = 0; i < 4; i++) {
-        row_t r = operation::getRow(m_board, i);
-        for (int j = 3; j >= 0; j--) {
-            if ((i * 4 + 3 - j) == positionOf1st32k || (i * 4 + 3 - j) == positionOf2nd32k)
-                cout << 32768 << "\t";
-            else if ((i * 4 + 3 - j) == positionOf64k) cout << 65536 << "\t";
-            else cout << configure::tile_score[((r >> 4 * j) & 0xf)] << "\t";
-        }
-        cout << endl;
-    }
-    cout << endl;
-}
-
-board_t board::getCurrentPosition() { return m_board; }
