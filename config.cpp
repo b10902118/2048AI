@@ -2,8 +2,9 @@
 #include "config.h"
 
 double* configure::COMMON_RATIOS = new double[16];
-int* configure::tile_score = new int[16];;
-double* configure::ct_score = new double[16*16];
+int* configure::tile_score = new int[16];
+;
+double* configure::ct_score = new double[16 * 16];
 double** configure::line_score = 0;
 double* configure::maxScoreOfSum = new double[65536];
 double* configure::minScoreOfSum = new double[65536];
