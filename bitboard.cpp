@@ -20,20 +20,19 @@ int board::getEmptyPos() {
     for (int i = 0; i < 64; i += 4) {
         if (((m_board >> i) & 0xf) == 0) empty++;
     }
+    if (empty == 0) {
+        return -1;
+    }
     int iStart = configure::uRNG.rand() % empty;
-    cout << iStart << endl;
+    // cout << iStart << endl;
     bool existEmpty = false;
 
     for (int i = 0; i < 16; i++) {
-        board_t b = m_board;
         if (((m_board >> (4 * (15 - i))) & 0xf) == 0) {
             if (iStart == 0) {
                 return i;
             }
             iStart--;
-            existEmpty = true;
-        } else if (i == 15 && existEmpty == false) {
-            return -1;
         }
     }
 
@@ -219,9 +218,21 @@ int board::move(int direct) {
     return score;
 };
 
-tuple<board_t, int, bool> board::step(int direct) {
+tuple<board_t, int, bool, board_t> board::step(int direct) {
     int reward = move(direct);
-    // must moved
+    board_t afterstate = m_board;
+    // must moved => have space
     insertNewPiece();
-    return make_tuple(m_board, reward, isEnd());
+    return make_tuple(m_board, reward, isEnd(), afterstate);
+}
+
+void board::showBoard() {
+    for (int i = 0; i < 4; i++) {
+        row_t r = operation::getRow(m_board, i);
+        for (int j = 3; j >= 0; j--) {
+            cout << configure::tile_score[((r >> 4 * j) & 0xf)] << "\t";
+        }
+        cout << endl;
+    }
+    cout << endl;
 }

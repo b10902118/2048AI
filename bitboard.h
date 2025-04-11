@@ -3,6 +3,7 @@
 
 #include "rng.h"
 #include "operation.h"
+#include "config.h"
 #include <iostream>
 #include <stdlib.h>
 #include <stdint.h>
@@ -28,7 +29,7 @@ class board {
     // else return -1
     int move(int direct);
 
-    tuple<board_t, int, bool> step(int direct);
+    tuple<board_t, int, bool, board_t> step(int direct);
 
     board_t getState() { return m_board; };
 
@@ -36,6 +37,8 @@ class board {
 
     // return true if cannot move anymore
     bool isEnd();
+
+    void showBoard();
 
    private:
     row_t toRightRow(int dir, int n);
