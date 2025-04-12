@@ -219,10 +219,16 @@ int board::move(int direct) {
 };
 
 tuple<board_t, int, bool, board_t> board::step(int direct) {
-    int reward = move(direct);
+    bool legal_actions[4];
+    getLegalActions(legal_actions);
+    int reward = 0;
     board_t afterstate = m_board;
+    if (legal_actions[direct]) {
+        reward = move(direct);
+        afterstate = m_board;
+    }
     // must moved => have space
-    insertNewPiece();
+    if (getEmptyPos() != -1) insertNewPiece();
     return make_tuple(m_board, reward, isEnd(), afterstate);
 }
 
@@ -235,4 +241,39 @@ void board::showBoard() {
         cout << endl;
     }
     cout << endl;
+}
+
+namespace py = pybind11;
+PYBIND11_MODULE(board, m) {
+    py::class_<board>(m, "Board")
+        .def(py::init<>())
+        .def(py::pickle(
+            [](const board& b) { // dump
+                return b.getState();
+            },
+            [](board_t s) { // load
+                return board(s);
+            }
+        ))
+        .def("init", &GameSetting::init)
+        .def("reset", (void (board::*)())&board::reset)
+        .def("reset_with_state", (void (board::*)(board_t))&board::reset)
+        .def("move", &board::move)
+        .def("step", &board::step)
+        .def("get_state", &board::getState)
+        .def("is_end", &board::isEnd)
+        .def("show", &board::showBoard)
+        .def(
+            "get_legal_actions",
+            [](board& b)
+            {
+                bool actions[4];
+                b.getLegalActions(actions);
+                vector<int> ret;
+                for (int i = 0; i < 4; ++i) {
+                    if (actions[i]) ret.push_back(i);
+                }
+                return ret;
+            }
+        );
 }

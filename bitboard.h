@@ -1,6 +1,8 @@
 #ifndef _BITBOARD_H
 #define _BITBOARD_H
 
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include "rng.h"
 #include "operation.h"
 #include "config.h"
@@ -31,7 +33,7 @@ class board {
 
     tuple<board_t, int, bool, board_t> step(int direct);
 
-    board_t getState() { return m_board; };
+    board_t getState() const { return m_board; };
 
     void getLegalActions(bool a[4]);
 
