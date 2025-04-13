@@ -3,10 +3,10 @@ from board import Board
 from math import log2
 
 
-DOWN = 0
-LEFT = 1
-UP = 2
-RIGHT = 3
+UP = 0
+RIGHT = 1
+DOWN = 2
+LEFT = 3
 
 
 class Game2048Env(Board):
