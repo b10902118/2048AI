@@ -3,7 +3,15 @@ from board import Board
 from math import log2
 
 
+DOWN = 0
+LEFT = 1
+UP = 2
+RIGHT = 3
+
+
 class Game2048Env(Board):
+
+    action_map = [UP, DOWN, LEFT, RIGHT]
 
     def __init__(self):
         super().__init__()
@@ -33,6 +41,7 @@ class Game2048Env(Board):
         return Game2048Env._to_array(s)
 
     def step(self, action):
+        action = self.action_map[action]
         state, reward, done, afterstate = super().step(action)
         self.score += reward
         return (
