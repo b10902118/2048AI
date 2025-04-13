@@ -66,7 +66,7 @@ class Game2048Env(Board):
         return self.get_state()
 
     def is_move_legal(self, action):
-        return action in self.get_legal_actions()
+        return self.action_map[action] in self.get_legal_actions()
 
     def render(self, action=None):
         pass
