@@ -64,7 +64,7 @@ class tupleNetwork {
     }
 
    private:
-    unsigned getFeature(const board_t board, const int pattern[4]) {
+    unsigned getFeature(const board_t board, const int pattern[6]) {
         unsigned feature = 0;
         for (int i = 0; i < 6; ++i) {
             feature <<= 4;
@@ -107,14 +107,14 @@ int main() {
     tupleNetwork tn(patterns, groups, gn);
     tn.loadWeights("weights.bin");
     const int num_episodes = 500000;
-    const float alpha = 0.1;
+    float alpha = 0.1;
     vector<int> final_scores;
+    int max_tile = 0;
     for (int t = 0; t < num_episodes; ++t) {
         board env;
         bool done = false;
         int score = 0;
         vector<pair<board_t, board_t>> trajectory;
-        int max_tile = 0;
         while (!done) {
             // cout << "state " << hex << env.getState() << endl;
             board_t state = env.getState();
@@ -175,9 +175,12 @@ int main() {
                 max_score = max(max_score, final_scores[i]);
             }
             avg_score /= 1000;
-            cout << "Episode: " << t + 1 << " Score: " << avg_score << " Max: " << max_score
-                 << " Max Tile: " << max_tile << endl;
+            cout << "Episode: " << t + 1 << "\tScore: " << avg_score << "\tMax: " << max_score
+                 << "\tMax Tile: " << max_tile << endl;
             final_scores.clear();
+            if (t + 1 > 20000) {
+                alpha *= 0.98;
+            }
         }
     }
     tn.saveWeights("weights.bin");
