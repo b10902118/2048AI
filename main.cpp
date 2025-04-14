@@ -135,7 +135,7 @@ int main() {
             score += reward;
             done = is_done;
 
-            // find max file
+            // find max tile
             for (int i = 0; i < 16; i++) {
                 int val = (state >> (4 * i)) & 0xf;
                 if (val > max_tile) {
@@ -178,9 +178,11 @@ int main() {
             cout << "Episode: " << t + 1 << "\tScore: " << avg_score << "\tMax: " << max_score
                  << "\tMax Tile: " << max_tile << endl;
             final_scores.clear();
+            /*
             if (t + 1 > 20000) {
                 alpha *= 0.98;
             }
+            */
         }
     }
     tn.saveWeights("weights.bin");
