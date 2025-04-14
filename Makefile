@@ -1,8 +1,5 @@
-all: config.o bitboard.o
-	g++ -shared -std=c++11 -fPIC -I/home/bill/micromamba/envs/hw2/include/python3.8 -I/home/bill/micromamba/envs/hw2/lib/python3.8/site-packages/pybind11/include config.cpp bitboard.cpp -o board.cpython-38-x86_64-linux-gnu.so
-
-#all: config.o bitboard.o main.o
-#	g++ -Ofast config.o bitboard.o main.o -o main
+all: config.o bitboard.o main.o
+	g++ -Ofast config.o bitboard.o main.o -o main
 
 main.o: main.cpp pattern.h bitboard.h
 	g++ -Ofast -c main.cpp -o main.o

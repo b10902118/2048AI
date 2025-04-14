@@ -26,20 +26,10 @@ class tupleNetwork {
         for (int g = 0; g < gn; ++g) {
             float* weight = new float[WEIGHT_SIZE];
             for (int j = 0; j < group_sizes[g]; ++j) {
-                weights[i] = weight;
-                ++i;
+                weights[i++] = weight;
             }
         }
     }
-
-    /*
-    ~tupleNetwork() {
-        for (int i = 0; i < WEIGHT_SIZE; ++i) {
-            delete[] weights[i];
-        }
-        delete[] weights;
-    }
-    */
 
     float value(board_t board) {
         float value = 0;
@@ -57,39 +47,30 @@ class tupleNetwork {
         }
     }
 
-    /*
     void saveWeights(const string& filename) {
-            ofstream file(filename, ios::binary);
-            if (!file) {
-                    cerr << "Error opening file for writing: " << filename << endl;
-                    return;
-            }
-            for (int i = 0; i < pn; ++i) {
-                    file.write(reinterpret_cast<char*>(weights[i]), sizeof(float) * WEIGHT_SIZE);
-            }
-            file.close();
+        ofstream ofs(filename, ios::binary);
+        for (int i = 0; i < fn; ++i) {
+            ofs.write(reinterpret_cast<char*>(weights[i]), WEIGHT_SIZE * sizeof(float));
+        }
+        ofs.close();
     }
 
     void loadWeights(const string& filename) {
-            ifstream file(filename, ios::binary);
-            if (!file) {
-                    cerr << "Error opening file for reading: " << filename << endl;
-                    return;
-            }
-            for (int i = 0; i < pn; ++i) {
-                    file.read(reinterpret_cast<char*>(weights[i]), sizeof(float) * WEIGHT_SIZE);
-            }
-            file.close();
+        ifstream ifs(filename, ios::binary);
+        for (int i = 0; i < fn; ++i) {
+            ifs.read(reinterpret_cast<char*>(weights[i]), WEIGHT_SIZE * sizeof(float));
+        }
+        ifs.close();
     }
-    */
 
    private:
-    unsigned getFeature(const board_t board, const int pattern[6]) {
+    unsigned getFeature(const board_t board, const int pattern[4]) {
         unsigned feature = 0;
         for (int i = 0; i < 6; ++i) {
             feature <<= 4;
-            feature |= (board >> pattern[i]) & 0xf;
+            feature |= (board >> (4 * pattern[i])) & 0xf;
         }
+        // assert(feature < WEIGHT_SIZE);
         return feature;
     }
     int fn;
@@ -110,8 +91,8 @@ int find_best_action(tupleNetwork& tn, const board_t state) {
             sim_env.reset(state);
             int reward = sim_env.move(action);
             float value = reward + tn.value(sim_env.getState());
-            cout << action << ": " << reward << " " << value << endl;
-            if (value > max_value) {
+            // cout << action << ": " << reward << " " << value << endl;
+            if (value >= max_value) {
                 max_value = value;
                 best_action = action;
             }
@@ -123,10 +104,10 @@ int find_best_action(tupleNetwork& tn, const board_t state) {
 int main() {
     GameSetting::init();
     tupleNetwork tn(patterns, groups, gn);
-    const int num_episodes = 1000;
+    tn.loadWeights("weights.bin");
+    const int num_episodes = 10000;
     const float alpha = 0.1;
     vector<int> final_scores;
-    /*
     for (int t = 0; t < num_episodes; ++t) {
         board env;
         bool done = false;
@@ -135,6 +116,13 @@ int main() {
         while (!done) {
             // cout << "state " << hex << env.getState() << endl;
             int action = find_best_action(tn, env.getState());
+            /*
+            if (!(action >= 0 && action < 4)) {
+                env.showBoard();
+                cout << action << endl;
+                assert(action >= 0 && action < 4);
+            }
+            */
             auto [next_state, reward, is_done, afterstate] = env.step(action);
             // cout << "action " << action << endl;
             // cout << "reward " << reward << endl;
@@ -144,61 +132,38 @@ int main() {
             score += reward;
             done = is_done;
         }
+        final_scores.push_back(score);
 
         for (auto it = trajectory.rbegin() + 1; it != trajectory.rend(); ++it) {
             const auto [s_after, s_next] = *it;
             int a_next = find_best_action(tn, s_next);
+            /*
+            if (!(a_next >= 0 && a_next < 4)) {
+                cout << trajectory.rend() - it << endl;
+                env.showBoard();
+                cout << a_next << endl;
+                assert(a_next >= 0 && a_next < 4);
+            }
+            */
             board sim_env(s_next);
             // sim_env.showBoard();
             int r_next = sim_env.move(a_next);
             board_t s_after_next = sim_env.getState();
             float delta = r_next + tn.value(s_after_next) - tn.value(s_after);
+            // cout << delta << " " << r_next << " " << tn.value(s_after_next) << " "
+            //      << tn.value(s_after) << endl;
             tn.update(s_after, delta, alpha);
         }
-        final_scores.push_back(score);
-        if ((t + 1) % 100 == 0) {
+
+        // logging
+        if ((t + 1) % 1000 == 0) {
             float avg_score = 0;
-            for (int i = 0; i < 100; ++i) {
+            for (int i = 0; i < 1000; ++i) {
                 avg_score += final_scores[t - i];
             }
-            avg_score /= 100;
+            avg_score /= 1000;
             cout << "Episode: " << t + 1 << ", Score: " << avg_score << endl;
         }
     }
-    */
-    // vector<pair<board_t, board_t>> trajectory;
-    ifstream f("traj.txt");
-    board_t s_after, s_next;
-    int action, reward;
-    while (f >> s_after >> s_next >> action >> reward) {
-        cout << s_after << " " << s_next << " " << action << " " << reward << endl;
-        int a_next = find_best_action(tn, s_next);
-        board sim_env(s_next);
-        sim_env.showBoard();
-        // assert(a_next == action);
-        //   sim_env.showBoard();
-        int r_next = sim_env.move(a_next);
-        cout << r_next << endl;
-        assert(r_next == reward);
-        board_t s_after_next = sim_env.getState();
-        float delta = r_next + tn.value(s_after_next) - tn.value(s_after);
-        tn.update(s_after, delta, alpha);
-    }
-    board env;
-    bool done = false;
-    int score = 0;
-    while (!done) {
-        // cout << "state " << hex << env.getState() << endl;
-        int action = find_best_action(tn, env.getState());
-        auto [next_state, reward, is_done, afterstate] = env.step(action);
-        // cout << "action " << action << endl;
-        // cout << "reward " << reward << endl;
-        // cout << "afterstate " << hex << afterstate << endl;
-        // cout << "next_state " << hex << next_state << endl;
-        // cout << action << endl;
-        // env.showBoard();
-        score += reward;
-        done = is_done;
-    }
-    cout << "Final score: " << score << endl;
+    tn.saveWeights("weights.bin");
 }
