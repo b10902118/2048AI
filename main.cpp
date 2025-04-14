@@ -98,6 +98,7 @@ int find_best_action(tupleNetwork& tn, const board_t state) {
             }
         }
     }
+    assert(best_action != -1);
     return best_action;
 }
 
@@ -105,7 +106,7 @@ int main() {
     GameSetting::init();
     tupleNetwork tn(patterns, groups, gn);
     tn.loadWeights("weights.bin");
-    const int num_episodes = 10000;
+    const int num_episodes = 500000;
     const float alpha = 0.1;
     vector<int> final_scores;
     for (int t = 0; t < num_episodes; ++t) {
@@ -113,9 +114,11 @@ int main() {
         bool done = false;
         int score = 0;
         vector<pair<board_t, board_t>> trajectory;
+        int max_tile = 0;
         while (!done) {
             // cout << "state " << hex << env.getState() << endl;
-            int action = find_best_action(tn, env.getState());
+            board_t state = env.getState();
+            int action = find_best_action(tn, state);
             /*
             if (!(action >= 0 && action < 4)) {
                 env.showBoard();
@@ -131,6 +134,14 @@ int main() {
             trajectory.push_back({afterstate, next_state});
             score += reward;
             done = is_done;
+
+            // find max file
+            for (int i = 0; i < 16; i++) {
+                int val = (state >> (4 * i)) & 0xf;
+                if (val > max_tile) {
+                    max_tile = val;
+                }
+            }
         }
         final_scores.push_back(score);
 
@@ -158,11 +169,15 @@ int main() {
         // logging
         if ((t + 1) % 1000 == 0) {
             float avg_score = 0;
+            int max_score = 0;
             for (int i = 0; i < 1000; ++i) {
-                avg_score += final_scores[t - i];
+                avg_score += final_scores[i];
+                max_score = max(max_score, final_scores[i]);
             }
             avg_score /= 1000;
-            cout << "Episode: " << t + 1 << ", Score: " << avg_score << endl;
+            cout << "Episode: " << t + 1 << " Score: " << avg_score << " Max: " << max_score
+                 << " Max Tile: " << max_tile << endl;
+            final_scores.clear();
         }
     }
     tn.saveWeights("weights.bin");
