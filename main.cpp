@@ -11,6 +11,7 @@
 #include <fstream>
 #include <cassert>
 #include <cmath>
+#include <memory>
 using namespace std;
 
 const int WEIGHT_SIZE = 0xffffff + 1;
@@ -109,18 +110,20 @@ struct MCTS_Node {
     int score;
     int visits;
     float total_reward;
-    vector<MCTS_Node*> children;
+    vector<shared_ptr<MCTS_Node>> children;
     vector<int> children_actions;
-    MCTS_Node* parent;
+    shared_ptr<MCTS_Node> parent;
     bool untried_actions[4];
 
     MCTS_Node(board_t s, int score) : state(s), score(score), visits(0), total_reward(0) {
         board(s).getLegalActions(untried_actions);
     }
     ~MCTS_Node() {
-        for (MCTS_Node* child : children) {
-            delete child;
-        }
+        // cout << "distructor start" << endl;
+        // for (shared_ptr<MCTS_Node> child : children) {
+        //     delete child;
+        // }
+        // cout << "distructor end" << endl;
     }
     bool fully_expanded() {
         for (int i = 0; i < 4; ++i) {
@@ -145,19 +148,6 @@ const int rollout_depth = 10;
 const float c = 1.41;
 
 namespace {
-MCTS_Node* select_child(MCTS_Node* node) {
-    MCTS_Node* best_child = nullptr;
-    float best_value = -numeric_limits<float>::max();
-    for (MCTS_Node* child : node->children) {
-        float ucb_value =
-            child->total_reward / child->visits + c * sqrt(log2(node->visits) / child->visits);
-        if (ucb_value > best_value) {
-            best_value = ucb_value;
-            best_child = child;
-        }
-    }
-    return best_child;
-}
 
 float rollout(board_t state, int score, const TupleNetwork& tn) {
     board sim_env(state);
@@ -194,7 +184,7 @@ float rollout(board_t state, int score, const TupleNetwork& tn) {
     return total_reward + tn.value(sim_env.getState());
 }
 
-void backpropagate(MCTS_Node* node, float reward) {
+void backpropagate(shared_ptr<MCTS_Node> node, float reward) {
     while (node) {
         // cout << "backpropagate " << node->state << " " << node->visits << " " <<
         // node->total_reward
@@ -207,10 +197,25 @@ void backpropagate(MCTS_Node* node, float reward) {
 
 }  // namespace
 
-void search(MCTS_Node* root, const TupleNetwork& tn) {
-    MCTS_Node* node = root;
+shared_ptr<MCTS_Node> select_child(shared_ptr<MCTS_Node> node) {
+    shared_ptr<MCTS_Node> best_child = nullptr;
+    float best_value = -numeric_limits<float>::max();
+    for (shared_ptr<MCTS_Node> child : node->children) {
+        assert(child->visits > 0);
+        float ucb_value =
+            child->total_reward / child->visits + c * sqrt(log2(node->visits) / child->visits);
+        if (ucb_value > best_value) {
+            best_value = ucb_value;
+            best_child = child;
+        }
+    }
+    return best_child;
+}
+
+void search(shared_ptr<MCTS_Node> root, const TupleNetwork& tn) {
+    shared_ptr<MCTS_Node> node = root;
     while (node->fully_expanded()) {
-        MCTS_Node* child = select_child(node);
+        shared_ptr<MCTS_Node> child = select_child(node);
         if (!child) {
             break;
         }
@@ -222,7 +227,8 @@ void search(MCTS_Node* root, const TupleNetwork& tn) {
         int action = node->try_action();
         assert(action != -1);
         auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
-        MCTS_Node* expanded_node = new MCTS_Node(next_state, node->score + reward);
+        shared_ptr<MCTS_Node> expanded_node =
+            make_shared<MCTS_Node>(next_state, node->score + reward);
         node->children.push_back(expanded_node);
         node->children_actions.push_back(action);
         expanded_node->parent = node;
@@ -234,7 +240,7 @@ void search(MCTS_Node* root, const TupleNetwork& tn) {
 }
 
 // best_action should be valid
-int best_action(MCTS_Node* root) {
+int best_action(shared_ptr<MCTS_Node> root) {
     int best_action = -1;
     float best_value = -numeric_limits<float>::max();
     for (int i = 0; i < root->children.size(); ++i) {
@@ -270,11 +276,11 @@ int main() {
             board_t state = env.getState();
             // int action = find_best_action(tn, state);
             int action;
-            auto root = MCTS_Node(state, score);
+            auto root = make_shared<MCTS_Node>(state, score);
             for (int i = 0; i < 50; ++i) {
-                search(&root, tn);
+                search(root, tn);
             }
-            action = best_action(&root);
+            action = best_action(root);
             /*
             if (score < 20000) {
                 action = find_best_action(tn, state);
@@ -336,17 +342,18 @@ int main() {
         // cout << t + 1 << "score: " << score << endl;
 
         // logging
-        if ((t + 1) % 1000 == 0) {
+        if ((t + 1) % 100 == 0) {
             float avg_score = 0;
             int max_score = 0;
-            for (int i = 0; i < 1000; ++i) {
+            for (int i = 0; i < 100; ++i) {
                 avg_score += final_scores[i];
                 max_score = max(max_score, final_scores[i]);
             }
-            avg_score /= 1000;
+            avg_score /= 100;
             cout << "Episode: " << t + 1 << "\tScore: " << avg_score << "\tMax: " << max_score
                  << "\tMax Tile: " << max_tile << endl;
             final_scores.clear();
+            max_tile = 0;
             /*
             if (t + 1 > 20000) {
                 alpha *= 0.98;
