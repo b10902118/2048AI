@@ -32,7 +32,7 @@ class TupleNetwork {
         }
     }
 
-    float value(board_t board) {
+    float value(board_t board) const {
         float value = 0;
         for (int i = 0; i < fn; ++i) {
             unsigned feature = getFeature(board, patterns[i]);
@@ -65,7 +65,7 @@ class TupleNetwork {
     }
 
    private:
-    unsigned getFeature(const board_t board, const int pattern[6]) {
+    unsigned getFeature(const board_t board, const int pattern[6]) const {
         unsigned feature = 0;
         for (int i = 0; i < 6; ++i) {
             feature <<= 4;
@@ -117,6 +117,11 @@ struct MCTS_Node {
     MCTS_Node(board_t s, int score) : state(s), score(score), visits(0), total_reward(0) {
         board(s).getLegalActions(untried_actions);
     }
+    ~MCTS_Node() {
+        for (MCTS_Node* child : children) {
+            delete child;
+        }
+    }
     bool fully_expanded() {
         for (int i = 0; i < 4; ++i) {
             if (untried_actions[i]) {
@@ -125,9 +130,10 @@ struct MCTS_Node {
         }
         return true;
     }
-    int get_untried_action() {
+    int try_action() {
         for (int i = 0; i < 4; ++i) {
             if (untried_actions[i]) {
+                untried_actions[i] = false;
                 return i;
             }
         }
@@ -153,10 +159,10 @@ MCTS_Node* select_child(MCTS_Node* node) {
     return best_child;
 }
 
-float rollout(board_t state, int score, TupleNetwork& tn) {
+float rollout(board_t state, int score, const TupleNetwork& tn) {
     board sim_env(state);
     int total_reward = score;
-    bool done = false;
+    bool done = sim_env.isEnd();
     for (int i = 0; i < rollout_depth && !done; ++i) {
         bool legal_actions[4];
         sim_env.getLegalActions(legal_actions);
@@ -168,8 +174,20 @@ float rollout(board_t state, int score, TupleNetwork& tn) {
                 break;
             }
         }
-        assert(action != -1);
         auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
+
+        /*
+        if (!(done ==
+              (!legal_actions[0] && !legal_actions[1] && !legal_actions[2] && !legal_actions[3]))) {
+            sim_env.showBoard();
+            cout << "done " << done << endl;
+            assert(
+                done ==
+                (!legal_actions[0] && !legal_actions[1] && !legal_actions[2] && !legal_actions[3])
+            );
+        }
+        */
+
         total_reward += reward;
         done = is_done;
     }
@@ -177,13 +195,45 @@ float rollout(board_t state, int score, TupleNetwork& tn) {
 }
 
 void backpropagate(MCTS_Node* node, float reward) {
-    while (node != nullptr) {
+    while (node) {
+        // cout << "backpropagate " << node->state << " " << node->visits << " " <<
+        // node->total_reward
+        //      << endl;
         node->visits++;
         node->total_reward += reward;
         node = node->parent;
     }
 }
 
+}  // namespace
+
+void search(MCTS_Node* root, const TupleNetwork& tn) {
+    MCTS_Node* node = root;
+    while (node->fully_expanded()) {
+        MCTS_Node* child = select_child(node);
+        if (!child) {
+            break;
+        }
+        node = child;
+    }
+
+    board sim_env(node->state);
+    if (!node->fully_expanded()) {
+        int action = node->try_action();
+        assert(action != -1);
+        auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
+        MCTS_Node* expanded_node = new MCTS_Node(next_state, node->score + reward);
+        node->children.push_back(expanded_node);
+        node->children_actions.push_back(action);
+        expanded_node->parent = node;
+        node = expanded_node;
+    }
+
+    int rollout_reward = rollout(node->state, node->score, tn);
+    backpropagate(node, rollout_reward);
+}
+
+// best_action should be valid
 int best_action(MCTS_Node* root) {
     int best_action = -1;
     float best_value = -numeric_limits<float>::max();
@@ -198,33 +248,6 @@ int best_action(MCTS_Node* root) {
     }
     return best_action;
 }
-}  // namespace
-
-void search(MCTS_Node* root, TupleNetwork& tn) {
-    MCTS_Node* node = root;
-    while (node->fully_expanded()) {
-        MCTS_Node* child = select_child(node);
-        if (child == nullptr) {
-            break;
-        }
-        node = child;
-    }
-
-    board sim_env(node->state);
-    if (!node->fully_expanded()) {
-        int action = node->get_untried_action();
-        assert(action != -1);
-        auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
-        auto expanded_node = new MCTS_Node(next_state, node->score + reward);
-        node->children.push_back(expanded_node);
-        node->children_actions.push_back(action);
-        expanded_node->parent = node;
-        node = expanded_node;
-    }
-
-    int rollout_reward = rollout(node->state, node->score, tn);
-    backpropagate(node, rollout_reward);
-}
 };  // namespace TD_MCTS
 
 using namespace TD_MCTS;
@@ -233,7 +256,7 @@ int main() {
     GameSetting::init();
     TupleNetwork tn(patterns, groups, gn);
     tn.loadWeights("weights.bin");
-    const int num_episodes = 500000;
+    const int num_episodes = 300000;
     float alpha = 0.1;
     vector<int> final_scores;
     int max_tile = 0;
@@ -245,7 +268,14 @@ int main() {
         while (!done) {
             // cout << "state " << hex << env.getState() << endl;
             board_t state = env.getState();
+            // int action = find_best_action(tn, state);
             int action;
+            auto root = MCTS_Node(state, score);
+            for (int i = 0; i < 50; ++i) {
+                search(&root, tn);
+            }
+            action = best_action(&root);
+            /*
             if (score < 20000) {
                 action = find_best_action(tn, state);
             } else {
@@ -255,6 +285,7 @@ int main() {
                 }
                 action = best_action(root);
             }
+            */
             /*
             if (!(action >= 0 && action < 4)) {
                 env.showBoard();
@@ -301,6 +332,8 @@ int main() {
             //      << tn.value(s_after) << endl;
             tn.update(s_after, delta, alpha);
         }
+
+        // cout << t + 1 << "score: " << score << endl;
 
         // logging
         if ((t + 1) % 1000 == 0) {

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
+#include <cassert>
 
 #define COMMON_RATIO 0.25
 
@@ -153,7 +154,7 @@ class GameSetting {
                 mask = ~mask;
                 r = r & mask;
                 isMove = true;
-            } else if (checkNum == compareNum) {
+            } else if (checkNum == compareNum) {  // checkNum != 0
                 r += (0x0001 << curCheck * 4);
 
                 row_t mask = rowMask << i * 4;
@@ -162,7 +163,7 @@ class GameSetting {
                 r = r & mask;
                 curCheck++;
 
-                score += configure::tile_score[checkNum + 1];
+                score += configure::tile_score[checkNum] * 2;  // checkNum+1 will overflow
                 isMove = true;
             } else if (checkNum != compareNum) {
                 curCheck++;
