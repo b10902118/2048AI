@@ -112,6 +112,7 @@ int main() {
     float alpha = 0.1;
     vector<int> final_scores;
     int max_tile = 0;
+    float max_avg_score = 0;
     for (int t = 0; t < num_episodes; ++t) {
         board env;
         bool done = false;
@@ -164,18 +165,26 @@ int main() {
         // cout << t + 1 << "score: " << score << endl;
 
         // logging
-        if ((t + 1) % 100 == 0) {
+        if ((t + 1) % 1000 == 0) {
             float avg_score = 0;
             int max_score = 0;
-            for (int i = 0; i < 100; ++i) {
+            for (int i = 0; i < 1000; ++i) {
                 avg_score += final_scores[i];
                 max_score = max(max_score, final_scores[i]);
             }
-            avg_score /= 100;
+            avg_score /= 1000;
             cout << "Episode: " << t + 1 << "\tScore: " << avg_score << "\tMax: " << max_score
                  << "\tMax Tile: " << max_tile << endl;
             final_scores.clear();
             max_tile = 0;
+            if (avg_score > max_avg_score && avg_score > 61000) {
+                max_avg_score = avg_score;
+                tn.saveWeights(
+                    "weights_best_" + to_string(t) + "_" +
+                    to_string(static_cast<int>(max_avg_score)) + ".bin"
+                );
+            }
+
             /*
             if (t + 1 > 20000) {
                 alpha *= 0.98;
@@ -183,5 +192,5 @@ int main() {
             */
         }
     }
-    tn.saveWeights("weights.bin");
+    tn.saveWeights("weights_last.bin");
 }
