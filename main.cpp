@@ -10,13 +10,14 @@
 #include <array>
 #include <fstream>
 #include <cassert>
+#include <cmath>
 using namespace std;
 
 const int WEIGHT_SIZE = 0xffffff + 1;
 
-class tupleNetwork {
+class TupleNetwork {
    public:
-    tupleNetwork(const int patterns[][6], const int group_sizes[], int gn)
+    TupleNetwork(const int patterns[][6], const int group_sizes[], int gn)
         : fn(0), patterns(patterns) {
         for (int i = 0; i < gn; ++i) {
             fn += group_sizes[i];
@@ -79,7 +80,7 @@ class tupleNetwork {
     float** weights;
 };
 
-int find_best_action(tupleNetwork& tn, const board_t state) {
+int find_best_action(TupleNetwork& tn, const board_t state) {
     float max_value = -numeric_limits<float>::max();
     int best_action = -1;
 
@@ -102,9 +103,135 @@ int find_best_action(tupleNetwork& tn, const board_t state) {
     return best_action;
 }
 
+namespace TD_MCTS {
+struct MCTS_Node {
+    board_t state;
+    int score;
+    int visits;
+    float total_reward;
+    vector<MCTS_Node*> children;
+    vector<int> children_actions;
+    MCTS_Node* parent;
+    bool untried_actions[4];
+
+    MCTS_Node(board_t s, int score) : state(s), score(score), visits(0), total_reward(0) {
+        board(s).getLegalActions(untried_actions);
+    }
+    bool fully_expanded() {
+        for (int i = 0; i < 4; ++i) {
+            if (untried_actions[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    int get_untried_action() {
+        for (int i = 0; i < 4; ++i) {
+            if (untried_actions[i]) {
+                return i;
+            }
+        }
+        return -1;
+    }
+};
+
+const int rollout_depth = 10;
+const float c = 1.41;
+
+namespace {
+MCTS_Node* select_child(MCTS_Node* node) {
+    MCTS_Node* best_child = nullptr;
+    float best_value = -numeric_limits<float>::max();
+    for (MCTS_Node* child : node->children) {
+        float ucb_value =
+            child->total_reward / child->visits + c * sqrt(log2(node->visits) / child->visits);
+        if (ucb_value > best_value) {
+            best_value = ucb_value;
+            best_child = child;
+        }
+    }
+    return best_child;
+}
+
+float rollout(board_t state, int score, TupleNetwork& tn) {
+    board sim_env(state);
+    int total_reward = score;
+    bool done = false;
+    for (int i = 0; i < rollout_depth && !done; ++i) {
+        bool legal_actions[4];
+        sim_env.getLegalActions(legal_actions);
+        int action = -1;
+        // TODO: random
+        for (int j = 0; j < 4; ++j) {
+            if (legal_actions[j]) {
+                action = j;
+                break;
+            }
+        }
+        assert(action != -1);
+        auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
+        total_reward += reward;
+        done = is_done;
+    }
+    return total_reward + tn.value(sim_env.getState());
+}
+
+void backpropagate(MCTS_Node* node, float reward) {
+    while (node != nullptr) {
+        node->visits++;
+        node->total_reward += reward;
+        node = node->parent;
+    }
+}
+
+int best_action(MCTS_Node* root) {
+    int best_action = -1;
+    float best_value = -numeric_limits<float>::max();
+    for (int i = 0; i < root->children.size(); ++i) {
+        auto& child = root->children[i];
+        float ucb_value =
+            child->total_reward / child->visits + c * sqrt(log2(root->visits) / child->visits);
+        if (ucb_value > best_value) {
+            best_value = ucb_value;
+            best_action = root->children_actions[i];
+        }
+    }
+    return best_action;
+}
+}  // namespace
+
+void search(MCTS_Node* root, TupleNetwork& tn) {
+    MCTS_Node* node = root;
+    while (node->fully_expanded()) {
+        MCTS_Node* child = select_child(node);
+        if (child == nullptr) {
+            break;
+        }
+        node = child;
+    }
+
+    board sim_env(node->state);
+    if (!node->fully_expanded()) {
+        int action = node->get_untried_action();
+        assert(action != -1);
+        auto [next_state, reward, is_done, afterstate] = sim_env.step(action);
+        auto expanded_node = new MCTS_Node(next_state, node->score + reward);
+        node->children.push_back(expanded_node);
+        node->children_actions.push_back(action);
+        expanded_node->parent = node;
+        node = expanded_node;
+    }
+
+    int rollout_reward = rollout(node->state, node->score, tn);
+    backpropagate(node, rollout_reward);
+}
+};  // namespace TD_MCTS
+
+using namespace TD_MCTS;
+
 int main() {
     GameSetting::init();
-    tupleNetwork tn(patterns, groups, gn);
+    TupleNetwork tn(patterns, groups, gn);
     tn.loadWeights("weights.bin");
     const int num_episodes = 500000;
     float alpha = 0.1;
@@ -118,7 +245,16 @@ int main() {
         while (!done) {
             // cout << "state " << hex << env.getState() << endl;
             board_t state = env.getState();
-            int action = find_best_action(tn, state);
+            int action;
+            if (score < 20000) {
+                action = find_best_action(tn, state);
+            } else {
+                auto root = new MCTS_Node(state, score);
+                for (int i = 0; i < 500; ++i) {
+                    search(root, tn);
+                }
+                action = best_action(root);
+            }
             /*
             if (!(action >= 0 && action < 4)) {
                 env.showBoard();
